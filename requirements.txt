@@ -1,0 +1,6 @@
+flask;
+flask_cors;
+g4f;
+logging;
+requests;
+gunicorn
