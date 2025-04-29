@@ -24,7 +24,6 @@ cssselect2==0.8.0
 curl_cffi==0.10.0
 defusedxml==0.7.1
 Deprecated==1.2.18
-duckduckgo_search==2025.4.4
 EbookLib==0.18
 et_xmlfile==2.0.0
 fastapi==0.115.12
