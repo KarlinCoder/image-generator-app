@@ -3,7 +3,6 @@
     {
       "src": "app.py",
       "use": "@vercel/python",
-      "PYTHON_VERSION": "3.13.2",
       "runtime": "python3.13.2"
     }
   ],
