@@ -15,6 +15,7 @@ IMGBB_API_KEY = "4bf9cca241b2a50667882775955ab6a7"
 # Modelos preferidos en orden
 PREFERRED_MODELS = ["flux", "dall-e", "gpt-4o-mini", "midjourney"]
 
+
 import tempfile
 
 def upload_to_imgbb(image_url):
@@ -50,49 +51,47 @@ def upload_to_imgbb(image_url):
         logging.error(f"Error al subir a ImgBB: {e}")
         return None
 
+
+def translate_prompt(prompt_sp):
+    """Traduce el prompt del español al inglés usando g4f."""
+    translation_prompt = (
+        "You are an assistant specialized in translating Spanish to English. "
+        "Please translate the following text into a clear and accurate English version, "
+        "ensuring it maintains its original intent and meaning for optimal use in image generation.\n\n"
+        f"{prompt_sp}"
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",  # Puedes cambiar por otro disponible en g4f
+            messages=[{"role": "user", "content": translation_prompt}],
+        )
+        translated_text = response.choices[0].message.content.strip()
+        logging.info(f"Prompt traducido: {translated_text}")
+        return translated_text
+    except Exception as e:
+        logging.error(f"Error al traducir: {e}")
+        return prompt_sp  # Fallback: usar el original si falla
+
+
 @app.route("/generate-image", methods=["POST"])
 def generate_image():
     data = request.get_json()
-    prompt = data.get("prompt")
+    prompt_sp = data.get("prompt")
 
-    if not prompt:
+    if not prompt_sp:
         return jsonify({"error": "El campo 'prompt' es obligatorio."}), 400
 
-    # Traducir el prompt a inglés
-    try:
-        translation_response = requests.post(
-            "https://libretranslate.com/translate",
-            headers={"Content-Type": "application/json"},
-            json={
-                "q": prompt,
-                "source": "es",
-                "target": "en",
-                "format": "text",
-                "alternatives": 3,
-                "api_key": ""
-            }
-        )
-        translation_response.raise_for_status()
-        translated_data = translation_response.json()
-        translated_prompt = translated_data.get("translatedText")
-        
-        if not translated_prompt:
-            logging.error("No se recibió el texto traducido.")
-            return jsonify({"error": "No se pudo traducir el prompt."}), 500
-            
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error en la API de traducción: {e}")
-        return jsonify({"error": "Error al traducir el prompt."}), 500
+    # Traducir el prompt
+    prompt_en = translate_prompt(prompt_sp)
 
-    logging.info(f"Prompt traducido: {translated_prompt}")
-
-    # Usar el prompt traducido para generar la imagen
+    # Intentar generar imagen con cada modelo
     for model in PREFERRED_MODELS:
         try:
             logging.info(f"Intentando con modelo: {model}")
             response = client.images.generate(
                 model=model,
-                prompt=translated_prompt,
+                prompt=prompt_en,
                 response_format="url"
             )
             image_url = response.data[0].url
@@ -105,8 +104,7 @@ def generate_image():
             # ✅ ¡Éxito! Devolvemos solo el enlace
             return jsonify({
                 "image_url": imgbb_url,
-                "original_prompt": prompt,
-                "translated_prompt": translated_prompt
+                "translated_prompt": prompt_en
             }), 200
 
         except Exception as e:
@@ -116,9 +114,11 @@ def generate_image():
     # ❌ Si todos fallan
     return jsonify({"error": "No se pudo generar y/o alojar la imagen."}), 500
 
+
 @app.route("/")
 def index():
     return jsonify({"message": "API de generación de imágenes lista"}), 200
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
