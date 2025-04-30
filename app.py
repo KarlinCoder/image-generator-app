@@ -52,46 +52,20 @@ def upload_to_imgbb(image_url):
         return None
 
 
-def translate_prompt(prompt_sp):
-    """Traduce el prompt del español al inglés usando g4f."""
-    translation_prompt = (
-        "You are an assistant specialized in translating Spanish to English. "
-        "Please translate the following text into a clear and accurate English version, "
-        "ensuring it maintains its original intent and meaning for optimal use in image generation.\n\n"
-        f"{prompt_sp}"
-    )
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Puedes cambiar por otro disponible en g4f
-            messages=[{"role": "user", "content": translation_prompt}],
-        )
-        translated_text = response.choices[0].message.content.strip()
-        logging.info(f"Prompt traducido: {translated_text}")
-        return translated_text
-    except Exception as e:
-        logging.error(f"Error al traducir: {e}")
-        return prompt_sp  # Fallback: usar el original si falla
-
-
 @app.route("/generate-image", methods=["POST"])
 def generate_image():
     data = request.get_json()
-    prompt_sp = data.get("prompt")
+    prompt = data.get("prompt")
 
-    if not prompt_sp:
+    if not prompt:
         return jsonify({"error": "El campo 'prompt' es obligatorio."}), 400
 
-    # Traducir el prompt
-    prompt_en = translate_prompt(prompt_sp)
-
-    # Intentar generar imagen con cada modelo
     for model in PREFERRED_MODELS:
         try:
             logging.info(f"Intentando con modelo: {model}")
             response = client.images.generate(
                 model=model,
-                prompt=prompt_en,
+                prompt=prompt,
                 response_format="url"
             )
             image_url = response.data[0].url
@@ -103,8 +77,7 @@ def generate_image():
 
             # ✅ ¡Éxito! Devolvemos solo el enlace
             return jsonify({
-                "image_url": imgbb_url,
-                "translated_prompt": prompt_en
+                "image_url": imgbb_url
             }), 200
 
         except Exception as e:
