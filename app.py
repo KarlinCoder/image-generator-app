@@ -52,25 +52,69 @@ def upload_to_imgbb(image_url):
         return None
 
 
+def translate_prompt_to_english(prompt):
+    """Usa G4F para traducir el prompt al inglés."""
+    try:
+        logging.info("Traduciendo prompt al inglés...")
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant. Translate the following text to English."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        translated_text = response.choices[0].message.content.strip()
+        logging.info(f"Prompt traducido: {translated_text}")
+        return translated_text
+    except Exception as e:
+        logging.warning(f"No se pudo traducir el prompt: {str(e)}")
+        return prompt  # Devolver original como fallback
+
+
 @app.route("/generate-image", methods=["POST"])
 def generate_image():
     data = request.get_json()
     prompt = data.get("prompt")
+    requested_model = data.get("model")  # Modelo opcional desde el cliente
 
     if not prompt:
         return jsonify({"error": "El campo 'prompt' es obligatorio."}), 400
 
+    # Traducimos el prompt al inglés
+    translated_prompt = translate_prompt_to_english(prompt)
+
+    # Si se especificó un modelo, usamos solo ese
+    if requested_model:
+        try:
+            logging.info(f"Generando imagen con modelo solicitado: {requested_model}")
+            response = client.images.generate(
+                model=requested_model,
+                prompt=translated_prompt,
+                response_format="url"
+            )
+            image_url = response.data[0].url
+
+            imgbb_url = upload_to_imgbb(image_url)
+            if not imgbb_url:
+                return jsonify({"error": "No se pudo alojar la imagen generada."}), 500
+
+            return jsonify({"image_url": imgbb_url}), 200
+
+        except Exception as e:
+            logging.error(f"Modelo '{requested_model}' falló: {str(e)}")
+            return jsonify({"error": f"No se pudo generar la imagen con el modelo '{requested_model}'."}), 500
+
+    # Si no se especificó modelo, usamos el flujo normal con PREFERRED_MODELS
     for model in PREFERRED_MODELS:
         try:
             logging.info(f"Intentando con modelo: {model}")
             response = client.images.generate(
                 model=model,
-                prompt=prompt,
+                prompt=translated_prompt,
                 response_format="url"
             )
             image_url = response.data[0].url
 
-            # Subimos la imagen a ImgBB
             imgbb_url = upload_to_imgbb(image_url)
             if not imgbb_url:
                 continue  # Si falla, probamos con otro modelo
