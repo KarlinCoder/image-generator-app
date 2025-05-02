@@ -15,7 +15,6 @@ IMGBB_API_KEY = "4bf9cca241b2a50667882775955ab6a7"
 # Modelos preferidos en orden
 PREFERRED_MODELS = ["flux", "dall-e", "gpt-4o-mini", "midjourney"]
 
-
 import tempfile
 
 def upload_to_imgbb(image_url):
@@ -55,11 +54,11 @@ def upload_to_imgbb(image_url):
 def translate_prompt_to_english(prompt):
     """Usa G4F para traducir el prompt al inglés."""
     try:
-        logging.info("Traduciendo prompt al inglés...")
+        logging.info(f"Traduciendo prompt al inglés: {prompt}")
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant. Translate the following text to English."},
+                {"role": "system", "content": "Traduce el siguiente texto al inglés contextualmente. Solo devuelve la traducción sin comentarios adicionales."},
                 {"role": "user", "content": prompt}
             ]
         )
@@ -67,7 +66,7 @@ def translate_prompt_to_english(prompt):
         logging.info(f"Prompt traducido: {translated_text}")
         return translated_text
     except Exception as e:
-        logging.warning(f"No se pudo traducir el prompt: {str(e)}")
+        logging.error(f"No se pudo traducir el prompt: {str(e)}")
         return prompt  # Devolver original como fallback
 
 
@@ -81,8 +80,11 @@ def generate_image():
     if not prompt:
         return jsonify({"error": "El campo 'prompt' es obligatorio."}), 400
 
+    logging.info(f"Recibida solicitud - Prompt: {prompt}, Traducir: {translate_flag}, Modelo: {requested_model}")
+
     # Traducimos si así se indica
-    translated_prompt = translate_prompt_to_english(prompt) if translate_flag else prompt
+    final_prompt = translate_prompt_to_english(prompt) if translate_flag else prompt
+    logging.info(f"Prompt final a usar: {final_prompt}")
 
     # Si se especificó un modelo, usamos solo ese
     if requested_model:
@@ -90,7 +92,7 @@ def generate_image():
             logging.info(f"Generando imagen con modelo solicitado: {requested_model}")
             response = client.images.generate(
                 model=requested_model,
-                prompt=translated_prompt,
+                prompt=final_prompt,
                 response_format="url"
             )
             image_url = response.data[0].url
@@ -102,12 +104,14 @@ def generate_image():
             return jsonify({
                 "image_url": imgbb_url,
                 "model_used": requested_model,
-                "translated_prompt": translated_prompt if translate_flag else None
+                "original_prompt": prompt,
+                "final_prompt": final_prompt,
+                "was_translated": translate_flag
             }), 200
 
         except Exception as e:
             logging.error(f"Modelo '{requested_model}' falló: {str(e)}")
-            return jsonify({"error": f"No se pudo generar la imagen con el modelo '{requested_model}'."}), 500
+            return jsonify({"error": f"No se pudo generar la imagen con el modelo '{requested_model}': {str(e)}"}), 500
 
     # Si no se especificó modelo, probamos con los por defecto
     for model in PREFERRED_MODELS:
@@ -115,7 +119,7 @@ def generate_image():
             logging.info(f"Intentando con modelo: {model}")
             response = client.images.generate(
                 model=model,
-                prompt=translated_prompt,
+                prompt=final_prompt,
                 response_format="url"
             )
             image_url = response.data[0].url
@@ -128,7 +132,9 @@ def generate_image():
             return jsonify({
                 "image_url": imgbb_url,
                 "model_used": model,
-                "translated_prompt": translated_prompt if translate_flag else None
+                "original_prompt": prompt,
+                "final_prompt": final_prompt,
+                "was_translated": translate_flag
             }), 200
 
         except Exception as e:
@@ -136,7 +142,7 @@ def generate_image():
             continue
 
     # ❌ Si todos fallan
-    return jsonify({"error": "No se pudo generar y/o alojar la imagen."}), 500
+    return jsonify({"error": "No se pudo generar y/o alojar la imagen con ningún modelo disponible."}), 500
 
 
 @app.route("/")
