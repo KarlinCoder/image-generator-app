@@ -82,10 +82,7 @@ def generate_image():
         return jsonify({"error": "El campo 'prompt' es obligatorio."}), 400
 
     # Traducimos si así se indica
-    if translate_flag:
-        translated_prompt = translate_prompt_to_english(prompt)
-    else:
-        translated_prompt = prompt
+    translated_prompt = translate_prompt_to_english(prompt) if translate_flag else prompt
 
     # Si se especificó un modelo, usamos solo ese
     if requested_model:
@@ -102,7 +99,11 @@ def generate_image():
             if not imgbb_url:
                 return jsonify({"error": "No se pudo alojar la imagen generada."}), 500
 
-            return jsonify({"image_url": imgbb_url}), 200
+            return jsonify({
+                "image_url": imgbb_url,
+                "model_used": requested_model,
+                "translated_prompt": translated_prompt if translate_flag else None
+            }), 200
 
         except Exception as e:
             logging.error(f"Modelo '{requested_model}' falló: {str(e)}")
@@ -123,9 +124,11 @@ def generate_image():
             if not imgbb_url:
                 continue  # Si falla, probamos con otro modelo
 
-            # ✅ ¡Éxito! Devolvemos solo el enlace
+            # ✅ ¡Éxito! Devolvemos imagen, modelo usado y traducción del prompt
             return jsonify({
-                "image_url": imgbb_url
+                "image_url": imgbb_url,
+                "model_used": model,
+                "translated_prompt": translated_prompt if translate_flag else None
             }), 200
 
         except Exception as e:
