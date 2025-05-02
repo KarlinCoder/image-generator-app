@@ -75,13 +75,17 @@ def translate_prompt_to_english(prompt):
 def generate_image():
     data = request.get_json()
     prompt = data.get("prompt")
-    requested_model = data.get("model")  # Modelo opcional desde el cliente
+    requested_model = data.get("model")         # Modelo opcional
+    translate_flag = data.get("translate_to_en", False)  # Por defecto no traduce
 
     if not prompt:
         return jsonify({"error": "El campo 'prompt' es obligatorio."}), 400
 
-    # Traducimos el prompt al inglés
-    translated_prompt = translate_prompt_to_english(prompt)
+    # Traducimos si así se indica
+    if translate_flag:
+        translated_prompt = translate_prompt_to_english(prompt)
+    else:
+        translated_prompt = prompt
 
     # Si se especificó un modelo, usamos solo ese
     if requested_model:
@@ -104,7 +108,7 @@ def generate_image():
             logging.error(f"Modelo '{requested_model}' falló: {str(e)}")
             return jsonify({"error": f"No se pudo generar la imagen con el modelo '{requested_model}'."}), 500
 
-    # Si no se especificó modelo, usamos el flujo normal con PREFERRED_MODELS
+    # Si no se especificó modelo, probamos con los por defecto
     for model in PREFERRED_MODELS:
         try:
             logging.info(f"Intentando con modelo: {model}")
